@@ -1,0 +1,2 @@
+pysunsetwx==1.0.0b1
+tweepy==3.10.0
