@@ -6,17 +6,26 @@ Use Google Cloud Functions to query SunsetWx API and send results via gmail or t
 ### Usage
 
 ```
-# Alter arguments in `sunsetwx_cloud_function.py`
+# Alter arguments in `main.py`
 nano main.py
 
 # Authenticate google cloud
 gcloud auth login
 
-# Deploy the cloud function.
-# Specify as params that "main" is the function for the code entry point, and a Pub/Sub topic named "standing" to listen from.
-gcloud functions deploy main --entry-point main --runtime=python37 --trigger-resource standing --trigger-event google.pubsub.topic.publish --timeout 540s
+### Sunset
+
+# Deploy the cloud function
+gcloud functions deploy sunset --entry-point main --runtime=python37 --trigger-resource sunset_trigger --trigger-event google.pubsub.topic.publish --timeout 540s
 
 # Scheduling the Cloud Function
-# Use gcloud scheduler command to deploy scheduler job which will publish a message to Pub/Sub topic named standing every day at 12:30.
-gcloud scheduler jobs create pubsub ElySunsetTrigger --schedule "30 12 * * *" --topic standing --message-body "This runs every day at 12:30"
+gcloud scheduler jobs create pubsub sunsetTrigger --schedule "30 12 * * *" --topic sunset_trigger --message-body "This runs every day at 12:30"
+
+### Sunrise
+
+# Deploy the cloud function
+gcloud functions deploy sunrise --entry-point main --runtime=python37 --trigger-resource sunrise_trigger --trigger-event google.pubsub.topic.publish --timeout 540s
+
+# Scheduling the Cloud Function
+gcloud scheduler jobs create pubsub sunriseTrigger --schedule "30 20 * * *" --topic sunrise_trigger --message-body "This runs every day at 20:30"
+
 ```

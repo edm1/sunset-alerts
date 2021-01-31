@@ -10,52 +10,89 @@ from pysunsetwx import PySunsetWx
 def main(data, context):
 
     #
-    # Set arguments -----------------------------------------------------------
+    # Configure app -----------------------------------------------------------
     #
-    
-    args = Args()
 
-    # SunsetWx
-    args.sunsetwx_username = "sunsetwx_username"
-    args.sunsetwx_password = "sunsetwx_password"
-    args.latitude = 52.395734
-    args.longitude = 0.270596
-    args.place_name = 'Ely'
-    args.prediction_type = "sunset"
-    # Twitter
-    args.tweet_min_quality = 50
-    # Gmail
-    args.gmail_username = "gmail_username"
-    args.gmail_password = "gmail_password"
-    args.email_recipient = "email_recipient"
-    args.archive_quality = 50
+    default_params = {
+        "sunsetwx_username": "sunsetwx_username",
+        "sunsetwx_password": "sunsetwx_password",
+        "gmail_username": "gmail_username",
+        "gmail_password": "gmail_password",
+    }
+
+    configs = {
+        'Ely sunset': {
+            # Sunsetwx
+            "latitude": 52.395734,
+            "longitude": 0.270596,
+            "place_name": 'Ely',
+            "prediction_type": "sunset",
+            # Gmail
+            "send_email": True,
+            "email_recipients": ["email_recipient"],
+            "email_min_quality": 0,
+            "email_tags": [
+                ('archive', lambda x: x < 50)
+            ],
+            # Twitter
+            "send_tweet": False,
+            "tweet_min_quality": 50
+        },
+        'Ely sunrise': {
+            # Sunsetwx
+            "latitude": 52.395734,
+            "longitude": 0.270596,
+            "place_name": 'Ely',
+            "prediction_type": "sunrise",
+            # Gmail
+            "send_email": True,
+            "email_recipients": ["email_recipient"],
+            "email_min_quality": 0,
+            "email_tags": [
+                ('archive', lambda x: x < 50)
+            ],
+            # Twitter
+            "send_tweet": False,
+            "tweet_min_quality": 50
+        },
+    }
 
     #
-    # Run task ----------------------------------------------------------------
+    # Run each config ---------------------------------------------------------
     #
-    
-    # Get prediction
-    pred = sunsetwx_query_api(
-        args.sunsetwx_username,
-        args.sunsetwx_password,
-        args.latitude,
-        args.longitude,
-        args.prediction_type
-    )
 
-    # Email the prediction
-    if all([args.gmail_username, args.gmail_password, args.email_recipient]):
-        send_gmail(
-            args.gmail_username,
-            args.gmail_password,
-            args.email_recipient,
-            pred,
-            args.place_name,
-            args.archive_quality
+    for _, config in configs.items():
+
+        # Add default params to config
+        for key, val in default_params.items():
+            if key not in config:
+                config[key] = val
+
+        # Get prediction
+        pred = sunsetwx_query_api(
+            config["sunsetwx_username"],
+            config["sunsetwx_password"],
+            config["latitude"],
+            config["longitude"],
+            config["prediction_type"]
         )
+        quality_perc = pred['features'][0]['properties']['quality_percent']
 
-    # Twitter
-    # TODO
+        # Email the prediction
+        if config['send_email'] and (quality_perc >= config['email_min_quality']):
+            send_gmail(
+                config["gmail_username"],
+                config["gmail_password"],
+                config["email_recipients"],
+                pred,
+                config["place_name"],
+                config["email_tags"]
+            )
+
+        # Twitter
+        # TODO
+
+        time.sleep(5)
 
     return 0
 
@@ -71,7 +108,7 @@ def sunsetwx_query_api(username, password, latitude, longitude, prediction_type)
 
     return quality
 
-def send_gmail(username, password, to, pred, location, archive_quality):
+def send_gmail(username, password, to, pred, place_name, tag_rules):
     ''' Send the prediction via gmail 
     '''
 
@@ -79,15 +116,19 @@ def send_gmail(username, password, to, pred, location, archive_quality):
     quality = pred['features'][0]['properties']['quality']
     quality_perc = pred['features'][0]['properties']['quality_percent']
     pred_type = pred['features'][0]['properties']['type']
+
+    # Get tags
+    tags = [tag for (tag, cond) in tag_rules if cond(quality_perc)]
+    if len(tags) > 0:
+        tag_str = f' tags: {",".join(tags)}'
+    else:
+        tag_str = ''
     
     # Create text
     msg = MIMEText(pprint.pformat(pred, indent=4))
-    if quality_perc < archive_quality:
-        msg['Subject'] = f"SunsetWx {location} {pred_type} {quality} {quality_perc:.1f} [archive]"
-    else:
-        msg['Subject'] = f"SunsetWx {location} {pred_type} {quality} {quality_perc:.1f}"
+    msg['Subject'] = f"SunsetWx prediction {place_name} {pred_type} {quality} {quality_perc:.1f}{tag_str}"
     msg['From'] = username
-    msg['To'] = to
+    msg['To'] = ', '.join(to)
 
     # Send email
     server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
@@ -98,9 +139,6 @@ def send_gmail(username, password, to, pred, location, archive_quality):
     print('Email sent!')
 
     return 0
-
-class Args:
-    pass
 
 if __name__ == '__main__':
 
